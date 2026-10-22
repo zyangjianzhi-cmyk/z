@@ -36,6 +36,13 @@ else {
       window.once('ready-to-show', () => window.show());
       // No arbitrary shell commands, file access or Node APIs are exposed to the renderer.
       function trusted(event) { return event.senderFrame?.url.startsWith(origin + '/') && event.sender === window?.webContents; }
+      ipcMain.handle('auth:open', async (event, url) => {
+        if (!trusted(event)) throw new Error('不允许此请求。');
+        const target = new URL(url);
+        if (target.protocol !== 'https:' || target.hostname !== 'jimeng.jianying.com') throw new Error('不支持此授权地址。');
+        try { await shell.openExternal(target.href); return { opened: true }; }
+        catch { return { opened: false }; }
+      });
       ipcMain.on('window:action', (event, action) => {
         if (!trusted(event)) return;
         if (action === 'minimize') window.minimize();

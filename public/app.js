@@ -37,7 +37,7 @@ function setAccount(account) {
   $('#account-label').textContent = account.connected ? `${String(account.vip).toUpperCase()} · 已连接` : '点击连接账户';
   $('#account-detail').textContent = account.connected ? `账户已连接\n会员：${String(account.vip).toUpperCase() || '普通账户'}\n可用积分：${Number(account.credits).toLocaleString('zh-CN')}` : account.error || '还没有连接即梦账户。';
   $('#connect').hidden = account.connected;
-  if (account.connected) { $('#auth-link').hidden = true; $('#auth-message').textContent = '登录成功。你可以开始创作了。'; }
+  if (account.connected) { $('#auth-link').hidden = true; $('#auth-tools').hidden = true; $('#auth-url').value = ''; $('#auth-message').textContent = '登录成功。你可以开始创作了。'; }
 }
 async function refreshAccount(notify = false) {
   try { setAccount(await api('/api/account')); if (notify) toast(state.connected ? '账户积分已更新' : '请连接即梦账户'); }
@@ -146,28 +146,44 @@ $('#confirm-generate').onclick = async () => {
 };
 $('#connect').onclick = async () => {
   // Open synchronously so browser popup protection does not block OAuth.
-  const popup = window.open('about:blank', '_blank');
+  const popup = window.luminaDesktop ? null : window.open('about:blank', '_blank');
   if (popup) popup.opener = null;
   $('#connect').disabled = true; $('#auth-message').textContent = '正在获取安全授权链接…';
+  $('#auth-tools').hidden = true; $('#auth-link').hidden = true;
   try {
     const result = await api('/api/auth/start', { method: 'POST', body: '{}' });
     if (result.authorized) { popup?.close(); setAccount(result.account); toast('登录成功，账户已连接'); return; }
     $('#auth-link').href = result.verificationUri; $('#auth-link').hidden = false;
-    if (popup) popup.location.href = result.verificationUri;
-    else if (window.luminaDesktop) window.open(result.verificationUri, '_blank');
+    $('#auth-tools').hidden = false; $('#auth-url').value = result.verificationUri;
+    let opened = true;
+    if (window.luminaDesktop) {
+      try { opened = (await window.luminaDesktop.openAuthorization(result.verificationUri)).opened; } catch { opened = false; }
+    } else if (popup) popup.location.href = result.verificationUri;
+    else opened = false;
     const expires = result.expiresAt ? new Date(result.expiresAt).toLocaleTimeString('zh-CN', { hour12: false }) : '稍后';
-    $('#auth-message').textContent = `请在浏览器中登录并确认授权。链接到期时间：${expires}。\n若账号在另一个浏览器，复制上方授权链接到该浏览器打开。`;
+    $('#auth-message').textContent = `${opened ? '已请求打开系统浏览器。' : '未能自动打开浏览器。'}请在浏览器中登录并确认授权。链接到期时间：${expires}。\n如果没有打开网页，点击“复制授权链接”，粘贴到已登录即梦的浏览器。`;
     clearTimeout(state.authTimer);
     async function check() {
       try {
         const data = await api('/api/auth/check', { method: 'POST', body: '{}' });
         if (data.authorized) { setAccount(data.account); toast('即梦登录成功，现在可以开始创作'); return; }
+        if (data.message) $('#auth-message').textContent = `等待浏览器授权。${data.message}\n如果未打开网页，请复制上方授权链接到浏览器。`;
         state.authTimer = setTimeout(check, 4000);
       } catch (error) { $('#auth-message').textContent = error.message; }
     }
     state.authTimer = setTimeout(check, 3000);
   } catch (error) { popup?.close(); $('#auth-message').textContent = error.message; }
   finally { $('#connect').disabled = false; }
+};
+$('#auth-link').onclick = async event => {
+  if (!window.luminaDesktop) return;
+  event.preventDefault();
+  try { const result = await window.luminaDesktop.openAuthorization($('#auth-url').value); if (!result.opened) toast('无法自动打开，请复制链接到浏览器'); }
+  catch { toast('请复制链接到浏览器打开'); }
+};
+$('#copy-auth').onclick = async () => {
+  try { await navigator.clipboard.writeText($('#auth-url').value); toast('授权链接已复制，请粘贴到浏览器地址栏'); }
+  catch { $('#auth-url').focus(); $('#auth-url').select(); toast('请按 Ctrl+C 复制选中的链接'); }
 };
 if (window.luminaDesktop) {
   document.body.classList.add('desktop-app');

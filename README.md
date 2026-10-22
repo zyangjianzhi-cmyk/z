@@ -4,7 +4,9 @@
 
 ## Windows 桌面版（推荐）
 
-前往 [Releases 下载页面](https://github.com/zyangjianzhi-cmyk/z/releases)，下载 **`Lumina-1.1.0-Windows.exe`** 并双击打开。无需安装 Node.js，无需运行 BAT，无需保留黑色命令窗口。内置官方 Dreamina Windows CLI，首次使用在软件内点击账户完成浏览器授权。这个版本为 Windows x64 便携版，尚未做发布者代码签名。
+1.1.1 修复桌面授权浏览器调用，并提供可复制的授权链接；无法自动打开浏览器时可手动授权。
+
+前往 [Releases 下载页面](https://github.com/zyangjianzhi-cmyk/z/releases)，下载 **`Lumina-1.1.1-Windows.exe`** 并双击打开。无需安装 Node.js，无需运行 BAT，无需保留黑色命令窗口。内置官方 Dreamina Windows CLI，首次使用在软件内点击账户完成浏览器授权。这个版本为 Windows x64 便携版，尚未做发布者代码签名。
 
 下载软件请使用 Releases 中的 EXE，GitHub 的 “Source code (zip)” 仍然是开发源码。
 
