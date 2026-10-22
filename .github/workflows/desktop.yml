@@ -1,0 +1,33 @@
+name: Build Windows Desktop
+on:
+  workflow_dispatch:
+  push:
+    tags: ['desktop-v*']
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run desktop:build
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lumina-Windows
+          path: dist/Lumina-*-Windows.exe
+      - name: Publish desktop download
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $file = (Get-ChildItem dist/Lumina-*-Windows.exe).FullName
+          gh release create $env:GITHUB_REF_NAME $file --title "Lumina 桌面版 $env:GITHUB_REF_NAME" --notes "Windows 独立桌面程序。下载 exe 后直接打开，无需 Node.js、npm 或命令窗口。内置官方 Dreamina CLI，首次使用需完成即梦浏览器授权。仅支持 Seedance 2.0 Fast VIP。生成会消耗积分。程序尚未进行代码签名。"

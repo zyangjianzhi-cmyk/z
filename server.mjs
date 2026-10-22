@@ -5,11 +5,12 @@ import { readFile, mkdir, writeFile, rename, open, unlink } from 'node:fs/promis
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { VIDEO_MODEL, VIDEO_RATIOS } from './public/studio-config.js';
 
 const exec = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-export const MODEL = 'seedance2.0fast_vip';
-const RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
+export const MODEL = VIDEO_MODEL;
+const RATIOS = VIDEO_RATIOS;
 const ACTIVE = new Set(['queued', 'submitting', 'querying']);
 
 export function parseJSON(text) {
@@ -211,7 +212,7 @@ export async function createStudio({ dataDir = path.join(ROOT, '.data'), run = d
       }
       if (isAPI) return json(res, 404, { error: '接口不存在。' });
       if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: '不支持的请求方式。' });
-      const files = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
+      const files = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/studio-config.js': ['studio-config.js', 'text/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
       const file = files[url.pathname];
       if (!file) return json(res, 404, { error: '页面不存在。' });
       const content = await readFile(path.join(ROOT, 'public', file[0]));

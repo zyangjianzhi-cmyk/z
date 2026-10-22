@@ -1,13 +1,9 @@
+import { presets } from './studio-config.js';
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const state = { tasks: [], selected: null, ratio: '16:9', connected: false, submitting: false, view: 'create', authTimer: null, refreshing: false };
 const labels = { queued: '等待提交', submitting: '正在提交', querying: '生成中', success: '已完成', failed: '生成失败', interrupted: '需要核实' };
 const active = task => ['queued', 'submitting', 'querying'].includes(task.status);
-const presets = {
-  cat: '清晨的阳光穿过白色窗帘，一只毛茸茸的小橘猫在窗边伸着懒腰，慢慢睁开眼睛，好奇地望向镜头。镜头缓缓推近，毛发在柔和的光线中闪闪发亮，温暖治愈的电影质感。',
-  nature: '雨后的森林里，细小的水珠从翠绿的叶尖缓缓滑落。晨光穿过薄雾，照亮苔藓与蕨类植物。镜头贴近地面缓慢向前移动，微风轻拂枝叶，自然、安静、富有生命力，电影级光影。',
-  city: '雨夜的未来城市，霓虹灯倒映在湿润的街道上，一辆复古电车缓缓穿过画面。镜头从高楼间平稳下降，远处飞行器划过天际，蓝紫色调，细腻的赛博朋克电影质感。',
-};
 const icon = name => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 let toastTimer;
@@ -158,6 +154,7 @@ $('#connect').onclick = async () => {
     if (result.authorized) { popup?.close(); setAccount(result.account); toast('登录成功，账户已连接'); return; }
     $('#auth-link').href = result.verificationUri; $('#auth-link').hidden = false;
     if (popup) popup.location.href = result.verificationUri;
+    else if (window.luminaDesktop) window.open(result.verificationUri, '_blank');
     const expires = result.expiresAt ? new Date(result.expiresAt).toLocaleTimeString('zh-CN', { hour12: false }) : '稍后';
     $('#auth-message').textContent = `请在浏览器中登录并确认授权。链接到期时间：${expires}。\n若账号在另一个浏览器，复制上方授权链接到该浏览器打开。`;
     clearTimeout(state.authTimer);
@@ -172,6 +169,14 @@ $('#connect').onclick = async () => {
   } catch (error) { popup?.close(); $('#auth-message').textContent = error.message; }
   finally { $('#connect').disabled = false; }
 };
+if (window.luminaDesktop) {
+  document.body.classList.add('desktop-app');
+  const bar = document.createElement('div');
+  bar.className = 'desktop-titlebar';
+  bar.innerHTML = '<span>LUMINA <b>灵感工作室</b></span><div><button data-window="minimize" aria-label="最小化">−</button><button data-window="maximize" aria-label="最大化">□</button><button data-window="close" aria-label="关闭">×</button></div>';
+  document.body.prepend(bar);
+  bar.querySelectorAll('[data-window]').forEach(button => button.onclick = () => window.luminaDesktop.windowAction(button.dataset.window));
+}
 renderPreview(); renderLists(); refreshAccount(); refreshTasks();
 setInterval(refreshTasks, 5000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshTasks(); refreshAccount(); } });

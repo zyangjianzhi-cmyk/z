@@ -1,6 +1,42 @@
 # Lumina · 即梦视频工作室
 
-一个轻量、简洁的本地视频创作软件。浅色界面、自绘 SVG 图标、响应式布局，无需安装前端依赖。
+一个简洁的桌面视频创作软件。浅紫色界面、自绘多尺寸应用图标、自定义窗口标题栏。桌面运行层、CLI 服务、界面和模型配置分开，便于继续增加功能。
+
+## Windows 桌面版（推荐）
+
+前往 [Releases 下载页面](https://github.com/zyangjianzhi-cmyk/z/releases)，下载 **`Lumina-1.1.0-Windows.exe`** 并双击打开。无需安装 Node.js，无需运行 BAT，无需保留黑色命令窗口。内置官方 Dreamina Windows CLI，首次使用在软件内点击账户完成浏览器授权。这个版本为 Windows x64 便携版，尚未做发布者代码签名。
+
+下载软件请使用 Releases 中的 EXE，GitHub 的 “Source code (zip)” 仍然是开发源码。
+
+作品记录存储在 Windows 用户应用数据目录的 `Lumina/projects` 下；登录由 CLI 在当前 Windows 用户目录管理，不会继承云端的登录凭证。关闭窗口会退出本机软件，已提交给即梦的云端任务不会因此取消。
+
+## 桌面版开发与构建
+
+开发需要 Node.js 22.12+（推荐 24）。
+
+```bash
+npm ci
+npm run desktop:prepare
+npm run desktop
+```
+
+构建 Windows 便携 EXE：
+
+```bash
+npm run desktop:build
+```
+
+产物在 `dist/`。`desktop:prepare` 从官方 HTTPS 地址下载 Windows CLI；构建所用 Electron 校验由官方打包工具完成。GitHub Actions 支持手动构建；推送 `desktop-v*` 标签会自动构建并上传到对应 Release。当前开发环境为 Linux，Windows EXE 的实际 Windows 运行仍需在 Windows 电脑验证。
+
+新增功能入口：
+
+- `desktop/`：窗口、图标、应用生命周期和有限 IPC；不向页面暴露 Node.js。
+- `public/studio-config.js`：模型能力、比例和灵感预设的共享配置。
+- `public/app.js`、`index.html`、`styles.css`：创作、作品、授权的界面；可按新功能拆分页面模块。
+- `server.mjs`：本机服务及 CLI 任务；新增功能可添加独立 API 模块，继续使用固定参数调用。
+- `.github/workflows/desktop.yml`：Windows 打包与发布。
+
+以下是保留的网页版开发启动说明；普通桌面版用户无需执行。
 
 仅调用 **`seedance2.0fast_vip`**，支持文字生成视频、6 种画幅、4–15 秒、720p。包含即梦账户连接、积分查询、生成队列、自动状态更新、视频预览和本地作品记录。每次生成前会确认积分消耗；不内置其他模型或自动切换模型。
 
