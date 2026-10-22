@@ -1,4 +1,6 @@
 import { presets } from './studio-config.js';
+import { mountAssistant } from './assistant.js';
+let assistant;
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const state = { tasks: [], projects: [], projectId: null, selected: null, ratio: '16:9', connected: false, submitting: false, view: 'home', authTimer: null, refreshing: false };
@@ -82,7 +84,7 @@ function renderLists() {
   $('#library-count').textContent = state.tasks.length;
   $('#task-total').textContent = `共 ${state.tasks.length} 个作品`;
   renderList($('#recent-list'), state.tasks.filter(t => !state.projectId || t.projectId === state.projectId).slice(0, 3));
-  renderProjects();
+  renderProjects(); assistant?.updateContext();
   const filter = $('#filter').value;
   const filtered = state.tasks.filter(t => filter === 'all' || (filter === 'active' ? active(t) : filter === 'failed' ? ['failed', 'interrupted'].includes(t.status) : t.status === filter));
   renderList($('#library-list'), filtered, true);
@@ -237,3 +239,50 @@ if (window.luminaDesktop) {
 renderPreview(); renderLists(); refreshAccount(); refreshTasks();
 setInterval(refreshTasks, 5000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshTasks(); refreshAccount(); } });
+
+assistant = mountAssistant({
+  context: () => state.projects.find(p => p.id === state.projectId)?.name ? `当前项目：${state.projects.find(p => p.id === state.projectId).name}` : '未选择项目 · 可先新建或切换项目',
+  execute: async command => {
+    const current = () => {
+      const project = state.projects.find(p => p.id === state.projectId);
+      if (!project) throw new Error('请先新建或切换项目，例如：新建项目「猫咪短片」。');
+      return project;
+    };
+    if (command.type === 'createProject') {
+      const project = await api('/api/projects', { method: 'POST', body: JSON.stringify({ name: command.name }) });
+      await refreshTasks(); enterProject(project); return `已创建项目「${project.name}」，并进入工作台。`;
+    }
+    if (command.type === 'switchProject') {
+      await refreshTasks(); const project = state.projects.find(p => p.name.toLowerCase() === command.name.toLowerCase());
+      if (!project) throw new Error(`没有找到项目「${command.name}」。请使用完整项目名称。`);
+      enterProject(project); return `已切换到「${project.name}」。`;
+    }
+    if (command.type === 'renameProject') {
+      const project = current(); await api(`/api/projects/${project.id}`, { method: 'PATCH', body: JSON.stringify({ name: command.name }) });
+      await refreshTasks(); $('#workspace-title').textContent = command.name; return `已将当前项目重命名为「${command.name}」。`;
+    }
+    if (command.type === 'home' || command.type === 'library') { showView(command.type); return command.type === 'home' ? '已打开创作首页。' : '已打开作品库。'; }
+    if (command.type === 'account') { $('#account-dialog').showModal(); refreshAccount(); return '已打开账户设置，请点击授权按钮连接即梦。'; }
+    if (command.type === 'credit') { await refreshAccount(); return state.connected ? `当前可用积分：${$('#credit').textContent}。` : '即梦账户尚未连接，请先在账户设置中授权。'; }
+    if (command.type === 'tasks') {
+      await refreshTasks(); const tasks = state.tasks.filter(t => !state.projectId || t.projectId === state.projectId);
+      const summary = `共 ${tasks.length} 个任务，进行中 ${tasks.filter(active).length} 个，已完成 ${tasks.filter(t => t.status === 'success').length} 个。`;
+      return summary + (tasks.length ? '\n' + tasks.slice(0, 5).map(t => `${labels[t.status] || t.status} · ${t.prompt.slice(0, 45)}`).join('\n') : '\n还没有提交生成任务。');
+    }
+    current();
+    if (command.type === 'prompt') { $('#prompt').value = command.prompt; updatePrompt(); showView('create'); return '已填写画面描述，你可以继续设置参数或发送“生成视频”。'; }
+    if (command.type === 'duration') { $('#duration').value = command.duration; showView('create'); return `时长已设置为 ${command.duration} 秒。`; }
+    if (command.type === 'ratio') { selectRatio(command.ratio); showView('create'); return `比例已设置为 ${command.ratio}。`; }
+    if (command.type === 'generate') {
+      if (state.submitting) throw new Error('正在提交任务，请等待当前提交完成。');
+      if (command.prompt) { $('#prompt').value = command.prompt; updatePrompt(); }
+      if (command.duration) $('#duration').value = command.duration;
+      if (command.ratio) selectRatio(command.ratio);
+      if (!$('#prompt').value.trim()) throw new Error('请先填写画面描述，例如：提示词：一只小猫在窗边晒太阳。');
+      if (!state.connected) { await refreshAccount(); if (!state.connected) { $('#account-dialog').showModal(); return '需要先连接即梦账户，授权后再发送“生成视频”。'; } }
+      showView('create'); $('#generation-form').requestSubmit();
+      return '视频参数已准备好，请在弹出的窗口中核对描述、时长和比例，并点击“确认生成”。确认前不会提交或消耗积分。';
+    }
+    throw new Error('暂不支持此操作。');
+  },
+});

@@ -237,7 +237,7 @@ export async function createStudio({ dataDir = path.join(ROOT, '.data'), run = d
       }
       if (isAPI) return json(res, 404, { error: '接口不存在。' });
       if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: '不支持的请求方式。' });
-      const files = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/studio-config.js': ['studio-config.js', 'text/javascript; charset=utf-8'], '/warm.css': ['warm.css', 'text/css; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
+      const files = { '/': ['index.html', 'text/html; charset=utf-8'], '/assistant.js': ['assistant.js', 'text/javascript; charset=utf-8'], '/app.js': ['app.js', 'text/javascript; charset=utf-8'], '/studio-config.js': ['studio-config.js', 'text/javascript; charset=utf-8'], '/warm.css': ['warm.css', 'text/css; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/favicon.svg': ['favicon.svg', 'image/svg+xml'] };
       const file = files[url.pathname];
       if (!file) return json(res, 404, { error: '页面不存在。' });
       const content = await readFile(path.join(ROOT, 'public', file[0]));
