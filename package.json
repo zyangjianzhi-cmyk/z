@@ -1,0 +1,9 @@
+{
+  "name": "lumina-dreamina-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A minimal local video studio powered by Dreamina CLI",
+  "scripts": { "start": "node server.mjs", "dev": "node --watch server.mjs", "test": "node --test" },
+  "engines": { "node": ">=20" }
+}
