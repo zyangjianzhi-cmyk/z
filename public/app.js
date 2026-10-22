@@ -1,7 +1,7 @@
 import { presets } from './studio-config.js';
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
-const state = { tasks: [], selected: null, ratio: '16:9', connected: false, submitting: false, view: 'create', authTimer: null, refreshing: false };
+const state = { tasks: [], selected: null, ratio: '16:9', connected: false, submitting: false, view: 'home', authTimer: null, refreshing: false };
 const labels = { queued: '等待提交', submitting: '正在提交', querying: '生成中', success: '已完成', failed: '生成失败', interrupted: '需要核实' };
 const active = task => ['queued', 'submitting', 'querying'].includes(task.status);
 const icon = name => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
@@ -23,9 +23,9 @@ async function api(url, options = {}) {
 }
 function showView(view) {
   state.view = view;
-  $('#create-view').hidden = view !== 'create'; $('#library-view').hidden = view !== 'library';
+  $('#home-view').hidden = view !== 'home'; $('#create-view').hidden = view !== 'create'; $('#library-view').hidden = view !== 'library';
   $$('.nav-item').forEach(el => { el.classList.toggle('active', el.dataset.view === view); el.setAttribute('aria-current', el.dataset.view === view ? 'page' : 'false'); });
-  $('#page-name').textContent = view === 'create' ? '视频创作' : '我的作品';
+  $('#page-name').textContent = ({home:'创作首页',create:'工作台',library:'作品库'})[view];
 }
 function updatePrompt() { $('#char-count').textContent = $('#prompt').value.length; $('#form-error').hidden = true; }
 function setAccount(account) {
@@ -82,6 +82,8 @@ function renderLists() {
   $('#library-count').textContent = state.tasks.length;
   $('#task-total').textContent = `共 ${state.tasks.length} 个作品`;
   renderList($('#recent-list'), state.tasks.slice(0, 3));
+  renderList($('#home-list'), state.tasks.slice(0, 6));
+  $('#home-summary').textContent = `共 ${state.tasks.length} 个记录 · 进行中 ${state.tasks.filter(active).length} · 已完成 ${state.tasks.filter(t => t.status === 'success').length}`;
   const filter = $('#filter').value;
   const filtered = state.tasks.filter(t => filter === 'all' || (filter === 'active' ? active(t) : filter === 'failed' ? ['failed', 'interrupted'].includes(t.status) : t.status === filter));
   renderList($('#library-list'), filtered, true);
@@ -112,6 +114,11 @@ function selectRatio(ratio) {
   $('#ratio-label').textContent = `${names[ratio]} · ${ratio}`;
 }
 $$('[data-view]').forEach(button => button.onclick = () => showView(button.dataset.view));
+const newCreation = () => { state.selected = null; showView('create'); renderPreview(); $('#prompt').focus(); };
+$('#home-new').onclick = newCreation; $('#board-new').onclick = newCreation;
+$('#home-library').onclick = () => showView('library');
+$('#home-settings').onclick = $('#settings-button').onclick = () => { $('#account-dialog').showModal(); refreshAccount(); };
+$$('[data-home-preset]').forEach(button => button.onclick = () => { newCreation(); $('#prompt').value = presets[button.dataset.homePreset]; updatePrompt(); });
 $('#view-all').onclick = () => showView('library');
 $('#new-video').onclick = () => { state.selected = null; showView('create'); renderPreview(); $('#prompt').focus(); };
 $('#filter').onchange = renderLists;

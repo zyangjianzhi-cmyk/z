@@ -29,7 +29,7 @@ else {
       Menu.setApplicationMenu(null);
       window = new BrowserWindow({
         title: 'Lumina · 灵感工作室', width: 1400, height: 960, minWidth: 900, minHeight: 680,
-        show: false, backgroundColor: '#f8f9fc', titleBarStyle: 'hidden',
+        show: false, backgroundColor: '#f8f5ed', titleBarStyle: 'hidden',
         icon: path.join(here, 'assets', 'icon.png'),
         webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: !app.isPackaged },
       });

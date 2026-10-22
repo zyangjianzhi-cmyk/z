@@ -1,12 +1,14 @@
 # Lumina · 即梦视频工作室
 
-一个简洁的桌面视频创作软件。浅紫色界面、自绘多尺寸应用图标、自定义窗口标题栏。桌面运行层、CLI 服务、界面和模型配置分开，便于继续增加功能。
+一个简洁的桌面视频创作软件。米白与暖金色界面、自绘多尺寸应用图标、自定义窗口标题栏。桌面运行层、CLI 服务、界面和模型配置分开，便于继续增加功能。
 
 ## Windows 桌面版（推荐）
 
+1.2.0 参考用户提供的工作台风格重做界面：左侧导航、创作首页、三列灵感卡片、真实创作记录卡片、工作台和作品库。保留 1.1.1 的授权修复。
+
 1.1.1 修复桌面授权浏览器调用，并提供可复制的授权链接；无法自动打开浏览器时可手动授权。
 
-前往 [Releases 下载页面](https://github.com/zyangjianzhi-cmyk/z/releases)，下载 **`Lumina-1.1.1-Windows.exe`** 并双击打开。无需安装 Node.js，无需运行 BAT，无需保留黑色命令窗口。内置官方 Dreamina Windows CLI，首次使用在软件内点击账户完成浏览器授权。这个版本为 Windows x64 便携版，尚未做发布者代码签名。
+前往 [Releases 下载页面](https://github.com/zyangjianzhi-cmyk/z/releases)，下载 **`Lumina-1.2.0-Windows.exe`** 并双击打开。无需安装 Node.js，无需运行 BAT，无需保留黑色命令窗口。内置官方 Dreamina Windows CLI，首次使用在软件内点击账户完成浏览器授权。这个版本为 Windows x64 便携版，尚未做发布者代码签名。
 
 下载软件请使用 Releases 中的 EXE，GitHub 的 “Source code (zip)” 仍然是开发源码。
 
