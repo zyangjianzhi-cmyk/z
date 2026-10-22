@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
@@ -15,7 +15,7 @@ async function fixture(t, run, initial) {
   const base = `http://127.0.0.1:${app.server.address().port}`;
   t.after(async () => { await app.close(); await rm(dir, { recursive: true, force: true }); });
   const request = (url, method = 'GET', body) => fetch(base + url, { method, headers: { 'Content-Type': 'application/json' }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-  return { base, request };
+  return { base, request, dir, app };
 }
 const input = { prompt: 'a kitten; $(touch /tmp/never-execute)', duration: 5, ratio: '16:9' };
 const account = JSON.stringify({ total_credit: 123, vip_level: 'ultra' });
@@ -122,4 +122,31 @@ test('single-instance lock prevents concurrent writers and releases on close', a
   await first.close();
   const next = await createStudio({ dataDir: dir, run: async () => account });
   await next.close();
+});
+
+test('no default projects; named projects persist, rename and own their tasks', async t => {
+  const run = async args => args[0] === 'user_credit' ? account : JSON.stringify({ gen_status: 'success', result_json: { videos: [{ video_url: 'https://example.com/project.mp4' }] } });
+  const { request, dir, app } = await fixture(t, run);
+  assert.deepEqual((await (await request('/api/projects')).json()).projects, []);
+  for (const name of ['', '   ', 'x'.repeat(61)]) assert.equal((await request('/api/projects', 'POST', { name })).status, 400);
+  assert.deepEqual((await (await request('/api/projects')).json()).projects, []);
+  const response = await request('/api/projects', 'POST', { name: '  我的短片  ' });
+  assert.equal(response.status, 201);
+  const project = await response.json(); assert.equal(project.name, '我的短片');
+  assert.equal((await request('/api/projects', 'POST', { name: '我的短片' })).status, 409);
+  assert.equal((await request('/api/tasks', 'POST', { ...input, projectId: 'missing' })).status, 404);
+  await request('/api/tasks', 'POST', { ...input, projectId: project.id });
+  const [task] = await until(request, tasks => tasks[0]?.status === 'success');
+  assert.equal(task.projectId, project.id);
+  const renamed = await request(`/api/projects/${project.id}`, 'PATCH', { name: '新名称 <script>' });
+  assert.equal(renamed.status, 200);
+  assert.equal((await (await request('/api/projects')).json()).projects[0].taskCount, 1);
+  assert.equal(JSON.parse(await readFile(path.join(dir, 'projects.json'), 'utf8'))[0].name, '新名称 <script>');
+  await app.close();
+  const restored = await createStudio({ dataDir: dir, run });
+  await new Promise(resolve => restored.server.listen(0, '127.0.0.1', resolve));
+  try {
+    const data = await (await fetch(`http://127.0.0.1:${restored.server.address().port}/api/projects`)).json();
+    assert.equal(data.projects.length, 1); assert.equal(data.projects[0].name, '新名称 <script>'); assert.equal(data.projects[0].taskCount, 1);
+  } finally { await restored.close(); }
 });

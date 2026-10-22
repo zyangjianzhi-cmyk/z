@@ -76,15 +76,21 @@ export async function createStudio({ dataDir = path.join(ROOT, '.data'), run = d
   let tasks;
   try { tasks = JSON.parse(await readFile(dbFile, 'utf8')); if (!Array.isArray(tasks)) throw new Error('Invalid task history'); }
   catch (error) { if (error.code !== 'ENOENT') { await releaseLock(); throw error; } tasks = []; }
+  const projectsFile = path.join(dataDir, 'projects.json');
+  let projects;
+  try { projects = JSON.parse(await readFile(projectsFile, 'utf8')); if (!Array.isArray(projects)) throw new Error('Invalid project history'); }
+  catch (error) { if (error.code !== 'ENOENT') { await releaseLock(); throw error; } projects = []; }
   let writing = Promise.resolve();
-  function save() {
-    const snapshot = JSON.stringify(tasks, null, 2);
+  function persist(file, data) {
+    const snapshot = JSON.stringify(data, null, 2);
     writing = writing.catch(() => {}).then(async () => {
-      await writeFile(`${dbFile}.tmp`, snapshot, { mode: 0o600 });
-      await rename(`${dbFile}.tmp`, dbFile);
+      await writeFile(`${file}.tmp`, snapshot, { mode: 0o600 });
+      await rename(`${file}.tmp`, file);
     });
     return writing;
   }
+  const save = () => persist(dbFile, tasks);
+  const projectList = () => projects.map(project => ({ ...project, taskCount: tasks.filter(t => t.projectId === project.id).length, activeCount: tasks.filter(t => t.projectId === project.id && ACTIVE.has(t.status)).length }));
   // Never resubmit an ambiguous paid request after a server restart.
   for (const task of tasks) if (task.status === 'submitting' && !task.submitId) {
     task.status = 'interrupted';
@@ -167,9 +173,28 @@ export async function createStudio({ dataDir = path.join(ROOT, '.data'), run = d
         try { return json(res, 200, await account()); }
         catch (error) { return json(res, 200, { connected: false, error: error.message }); }
       }
-      if (req.method === 'GET' && url.pathname === '/api/tasks') return json(res, 200, { tasks: tasks.map(clean).reverse(), model: MODEL });
+      if (req.method === 'GET' && url.pathname === '/api/projects') return json(res, 200, { projects: projectList() });
+      if ((req.method === 'POST' && url.pathname === '/api/projects') || (req.method === 'PATCH' && /^\/api\/projects\/[\w-]+$/.test(url.pathname))) {
+        const input = await body(req);
+        const name = typeof input.name === 'string' ? input.name.trim() : '';
+        if (!name || name.length > 60) return json(res, 400, { error: '请输入 1–60 字的项目名称。' });
+        const id = req.method === 'PATCH' ? url.pathname.split('/').pop() : null;
+        if (id && !projects.some(p => p.id === id)) return json(res, 404, { error: '项目不存在。' });
+        if (projects.some(p => p.id !== id && p.name.toLowerCase() === name.toLowerCase())) return json(res, 409, { error: '已有同名项目，请换一个名称。' });
+        const project = id ? projects.find(p => p.id === id) : { id: randomUUID(), createdAt: new Date().toISOString() };
+        project.name = name;
+        if (!id) projects.push(project);
+        await persist(projectsFile, projects);
+        return json(res, id ? 200 : 201, project);
+      }
+      if (req.method === 'GET' && url.pathname === '/api/tasks') return json(res, 200, { tasks: tasks.map(clean).reverse(), projects: projectList(), model: MODEL });
       if (req.method === 'POST' && url.pathname === '/api/tasks') {
-        const input = validateInput(await body(req));
+        const raw = await body(req);
+        const input = validateInput(raw);
+        if (raw.projectId !== undefined) {
+          if (!projects.some(p => p.id === raw.projectId)) return json(res, 404, { error: '项目不存在，请重新选择。' });
+          input.projectId = raw.projectId;
+        }
         if (tasks.filter(t => ACTIVE.has(t.status)).length >= 3) return json(res, 429, { error: '最多同时保留 3 个进行中的任务，请等待当前任务完成。' });
         await account(); // Fail before submitting a paid request if authentication is unavailable.
         if (tasks.filter(t => ACTIVE.has(t.status)).length >= 3) return json(res, 429, { error: '最多同时保留 3 个进行中的任务，请等待当前任务完成。' });

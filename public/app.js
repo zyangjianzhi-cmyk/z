@@ -1,7 +1,7 @@
 import { presets } from './studio-config.js';
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
-const state = { tasks: [], selected: null, ratio: '16:9', connected: false, submitting: false, view: 'home', authTimer: null, refreshing: false };
+const state = { tasks: [], projects: [], projectId: null, selected: null, ratio: '16:9', connected: false, submitting: false, view: 'home', authTimer: null, refreshing: false };
 const labels = { queued: '等待提交', submitting: '正在提交', querying: '生成中', success: '已完成', failed: '生成失败', interrupted: '需要核实' };
 const active = task => ['queued', 'submitting', 'querying'].includes(task.status);
 const icon = name => `<svg aria-hidden="true"><use href="#i-${name}"/></svg>`;
@@ -76,14 +76,13 @@ function taskCard(task) {
 }
 function renderList(el, tasks, isLibrary = false) {
   el.innerHTML = tasks.length ? `<div class="task-list">${tasks.map(taskCard).join('')}</div>` : `<div class="empty-history">${icon('film')}<div><strong>${isLibrary && state.tasks.length ? '这里还没有这个状态的作品' : '你的第一部作品，正在等你创造'}</strong><p>${isLibrary && state.tasks.length ? '换个筛选条件看看吧' : '写下一个想法，让灵感在这里留下足迹。'}</p></div></div>`;
-  el.querySelectorAll('[data-task]').forEach(button => button.onclick = () => { state.selected = button.dataset.task; showView('create'); renderPreview(); $('.preview-panel').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+  el.querySelectorAll('[data-task]').forEach(button => button.onclick = () => { state.selected = button.dataset.task; const task = state.tasks.find(t => t.id === state.selected); state.projectId = task?.projectId || null; $('#workspace-title').textContent = state.projects.find(p => p.id === state.projectId)?.name || '历史作品'; showView('create'); renderPreview(); $('.preview-panel').scrollIntoView({ behavior: 'smooth', block: 'center' }); });
 }
 function renderLists() {
   $('#library-count').textContent = state.tasks.length;
   $('#task-total').textContent = `共 ${state.tasks.length} 个作品`;
-  renderList($('#recent-list'), state.tasks.slice(0, 3));
-  renderList($('#home-list'), state.tasks.slice(0, 6));
-  $('#home-summary').textContent = `共 ${state.tasks.length} 个记录 · 进行中 ${state.tasks.filter(active).length} · 已完成 ${state.tasks.filter(t => t.status === 'success').length}`;
+  renderList($('#recent-list'), state.tasks.filter(t => !state.projectId || t.projectId === state.projectId).slice(0, 3));
+  renderProjects();
   const filter = $('#filter').value;
   const filtered = state.tasks.filter(t => filter === 'all' || (filter === 'active' ? active(t) : filter === 'failed' ? ['failed', 'interrupted'].includes(t.status) : t.status === filter));
   renderList($('#library-list'), filtered, true);
@@ -92,10 +91,10 @@ async function refreshTasks() {
   if (state.refreshing) return;
   state.refreshing = true;
   try {
-    const { tasks } = await api('/api/tasks');
+    const { tasks, projects = [] } = await api('/api/tasks');
     const before = state.tasks.find(t => t.id === state.selected);
-    state.tasks = tasks;
-    if (!state.selected && tasks.length) state.selected = tasks[0].id;
+    state.tasks = tasks; state.projects = projects;
+    if (!state.selected) state.selected = tasks.find(t => !state.projectId || t.projectId === state.projectId)?.id || null;
     const current = tasks.find(t => t.id === state.selected);
     // Preserve playback position and controls while polling completed videos.
     if (!before || JSON.stringify(before) !== JSON.stringify(current)) renderPreview();
@@ -114,13 +113,47 @@ function selectRatio(ratio) {
   $('#ratio-label').textContent = `${names[ratio]} · ${ratio}`;
 }
 $$('[data-view]').forEach(button => button.onclick = () => showView(button.dataset.view));
-const newCreation = () => { state.selected = null; showView('create'); renderPreview(); $('#prompt').focus(); };
-$('#home-new').onclick = newCreation; $('#board-new').onclick = newCreation;
-$('#home-library').onclick = () => showView('library');
+let editingProject = null;
+function openProjectDialog(project = null) {
+  editingProject = project;
+  $('#project-name').value = project?.name || '';
+  $('#project-error').hidden = true;
+  $('#project-dialog-title').textContent = project ? '重命名项目' : '新建项目';
+  $('#save-project').textContent = project ? '保存名称' : '创建项目';
+  $('#project-dialog').showModal(); $('#project-name').focus();
+}
+function enterProject(project) {
+  state.projectId = project.id;
+  state.selected = state.tasks.find(t => t.projectId === project.id)?.id || null;
+  $('#workspace-title').textContent = project.name;
+  $('#prompt').value = ''; updatePrompt(); renderPreview(); renderLists(); showView('create');
+}
+function renderProjects() {
+  const el = $('#projects-list');
+  if (!state.projects.length) { el.innerHTML = `<div class="empty-history project-empty">${icon('grid')}<div><strong>还没有项目</strong><p>点击“新建项目”，输入你自己的项目名称后开始创作。</p></div></div>`; return; }
+  el.innerHTML = state.projects.map(p => `<article class="project-card"><div class="card-mark">${icon('film')}<span>我的项目</span></div><h3>${escape(p.name)}</h3><p>创作记录 ${p.taskCount || 0} · 进行中 ${p.activeCount || 0}</p><div class="project-actions"><button class="primary-button compact" data-enter-project="${escape(p.id)}">进入工作台</button><button class="secondary-button" data-rename-project="${escape(p.id)}">重命名</button></div></article>`).join('');
+  el.querySelectorAll('[data-enter-project]').forEach(b => b.onclick = () => enterProject(state.projects.find(p => p.id === b.dataset.enterProject)));
+  el.querySelectorAll('[data-rename-project]').forEach(b => b.onclick = () => openProjectDialog(state.projects.find(p => p.id === b.dataset.renameProject)));
+}
+$('#project-form').onsubmit = async event => {
+  event.preventDefault();
+  const name = $('#project-name').value.trim();
+  if (!name) { $('#project-error').textContent = '请输入项目名称。'; $('#project-error').hidden = false; return; }
+  $('#save-project').disabled = true;
+  try {
+    const project = await api(editingProject ? `/api/projects/${editingProject.id}` : '/api/projects', { method: editingProject ? 'PATCH' : 'POST', body: JSON.stringify({ name }) });
+    const renaming = !!editingProject;
+    await refreshTasks(); $('#project-dialog').close();
+    if (!renaming) enterProject(project);
+    else if (state.projectId === project.id) $('#workspace-title').textContent = project.name;
+    toast(renaming ? '项目名称已保存' : '项目已创建');
+  } catch (error) { $('#project-error').textContent = error.message; $('#project-error').hidden = false; }
+  finally { $('#save-project').disabled = false; }
+};
+$('#home-new').onclick = $('#board-new').onclick = () => openProjectDialog();
 $('#home-settings').onclick = $('#settings-button').onclick = () => { $('#account-dialog').showModal(); refreshAccount(); };
-$$('[data-home-preset]').forEach(button => button.onclick = () => { newCreation(); $('#prompt').value = presets[button.dataset.homePreset]; updatePrompt(); });
 $('#view-all').onclick = () => showView('library');
-$('#new-video').onclick = () => { state.selected = null; showView('create'); renderPreview(); $('#prompt').focus(); };
+$('#new-video').onclick = () => { if (!state.projectId) return openProjectDialog(); enterProject(state.projects.find(p => p.id === state.projectId)); };
 $('#filter').onchange = renderLists;
 $('#prompt').oninput = updatePrompt;
 $$('[data-preset]').forEach(button => button.onclick = () => { $('#prompt').value = presets[button.dataset.preset]; updatePrompt(); $('#prompt').focus(); });
@@ -134,8 +167,9 @@ let pendingInput;
 $('#generation-form').onsubmit = event => {
   event.preventDefault();
   if (state.submitting) return;
+  if (!state.projectId) { openProjectDialog(); return; }
   if (!state.connected) { $('#account-dialog').showModal(); return; }
-  pendingInput = { prompt: $('#prompt').value.trim(), duration: Number($('#duration').value), ratio: state.ratio };
+  pendingInput = { prompt: $('#prompt').value.trim(), duration: Number($('#duration').value), ratio: state.ratio, projectId: state.projectId };
   if (!pendingInput.prompt) { $('#prompt').focus(); return; }
   $('#confirm-summary').textContent = `${pendingInput.duration} 秒 · ${pendingInput.ratio} · 720p\n${pendingInput.prompt}`;
   $('#confirm-dialog').showModal();
